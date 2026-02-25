@@ -10,8 +10,15 @@ cnt = pyk4a.connected_device_count()
 print(f"Found {cnt} connected Azure Kinect devices.")
 
 cfg = pyk4a.Config(
+    # https://microsoft.github.io/Azure-Kinect-Sensor-SDK/master/group___enumerations_gabd9688eb20d5cb878fd22d36de882ddb.html
+    color_format=pyk4a.ImageFormat.COLOR_BGRA32,
+
+    # https://microsoft.github.io/Azure-Kinect-Sensor-SDK/master/group___enumerations_gabc7cab5e5396130f97b8ab392443c7b8.html
     color_resolution=pyk4a.ColorResolution.RES_1080P,
-    depth_mode=pyk4a.DepthMode.NFOV_UNBINNED,
+
+    # https://microsoft.github.io/Azure-Kinect-Sensor-SDK/master/group___enumerations_ga3507ee60c1ffe1909096e2080dd2a05d.html
+    depth_mode=pyk4a.DepthMode.OFF,
+
     camera_fps=pyk4a.FPS.FPS_15,
     synchronized_images_only=False
 )
@@ -23,6 +30,25 @@ camera_to_camera_transforms = None  # T_A_C = T_A_B @ inv(T_C_B)
 for i in range(cnt):
     k4a = PyK4A(config=cfg, device_id=i)
     k4a.start()
+
+    k4a._set_color_control(
+        cmd=pyk4a.ColorControlCommand.EXPOSURE_TIME_ABSOLUTE,
+        mode=pyk4a.ColorControlMode.AUTO,
+        value=0 # still required even though its auto
+    )
+
+    k4a._set_color_control(
+        cmd=pyk4a.ColorControlCommand.WHITEBALANCE,
+        mode=pyk4a.ColorControlMode.AUTO,
+        value=0 # still required even though its auto
+    )
+
+    k4a._set_color_control(cmd=pyk4a.ColorControlCommand.BRIGHTNESS, mode=pyk4a.ColorControlMode.MANUAL, value=128)
+    k4a._set_color_control(cmd=pyk4a.ColorControlCommand.CONTRAST, mode=pyk4a.ColorControlMode.MANUAL, value=5)
+    k4a._set_color_control(cmd=pyk4a.ColorControlCommand.SATURATION, mode=pyk4a.ColorControlMode.MANUAL, value=32)
+    k4a._set_color_control(cmd=pyk4a.ColorControlCommand.SHARPNESS, mode=pyk4a.ColorControlMode.MANUAL, value=2)
+    k4a._set_color_control(cmd=pyk4a.ColorControlCommand.GAIN, mode=pyk4a.ColorControlMode.MANUAL, value=60)
+
     cap = None
     for attempt in range(10):  # Try up to 10 times
         cap = k4a.get_capture()
