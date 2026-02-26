@@ -69,6 +69,34 @@ static void set_manual_exposure_and_gain(k4a_device_t dev,
     }
 }
 
+static void set_manual_color_controls(k4a_device_t dev,
+                                      int32_t whitebalance,
+                                      int32_t brightness,
+                                      int32_t contrast,
+                                      int32_t saturation,
+                                      int32_t sharpness)
+{
+    if (K4A_FAILED(k4a_device_set_color_control(dev, K4A_COLOR_CONTROL_WHITEBALANCE,
+                                               K4A_COLOR_CONTROL_MODE_MANUAL, whitebalance)))
+        die("Failed to set manual white balance.");
+
+    if (K4A_FAILED(k4a_device_set_color_control(dev, K4A_COLOR_CONTROL_BRIGHTNESS,
+                                               K4A_COLOR_CONTROL_MODE_MANUAL, brightness)))
+        die("Failed to set manual brightness.");
+
+    if (K4A_FAILED(k4a_device_set_color_control(dev, K4A_COLOR_CONTROL_CONTRAST,
+                                               K4A_COLOR_CONTROL_MODE_MANUAL, contrast)))
+        die("Failed to set manual contrast.");
+
+    if (K4A_FAILED(k4a_device_set_color_control(dev, K4A_COLOR_CONTROL_SATURATION,
+                                               K4A_COLOR_CONTROL_MODE_MANUAL, saturation)))
+        die("Failed to set manual saturation.");
+
+    if (K4A_FAILED(k4a_device_set_color_control(dev, K4A_COLOR_CONTROL_SHARPNESS,
+                                               K4A_COLOR_CONTROL_MODE_MANUAL, sharpness)))
+        die("Failed to set manual sharpness.");
+}
+
 struct DeviceCtx
 {
     int index = -1;
@@ -95,8 +123,16 @@ int main(int argc, char **argv)
     int master_index = -1; // auto detects unless you want to override
 
     // EXPOSURE DEFAULTS!!!
+    // 2500 or 8330
     int32_t exposure_usec = 2500; // reduce motion blur, make frame darker
     int32_t gain = 60; // makes frame lighter but more grainy
+
+    // additional color control defaults
+    int32_t whitebalance = 4500;
+    int32_t brightness   = 255;
+    int32_t contrast     = 10;
+    int32_t saturation   = 32;
+    int32_t sharpness    = 2;
 
     // IR depth delay between master and sub
     int32_t subordinate_delay_usec = 160;
@@ -116,6 +152,17 @@ int main(int argc, char **argv)
 
     if (parse_arg_value(argc, argv, "--gain", tmp))
         gain = std::stoi(tmp);
+
+    if (parse_arg_value(argc, argv, "--whitebalance", tmp))
+        whitebalance = std::stoi(tmp);
+    if (parse_arg_value(argc, argv, "--brightness", tmp))
+        brightness = std::stoi(tmp);
+    if (parse_arg_value(argc, argv, "--contrast", tmp))
+        contrast = std::stoi(tmp);
+    if (parse_arg_value(argc, argv, "--saturation", tmp))
+        saturation = std::stoi(tmp);
+    if (parse_arg_value(argc, argv, "--sharpness", tmp))
+        sharpness = std::stoi(tmp);
 
     if (parse_arg_value(argc, argv, "--sub-delay-usec", tmp))
         subordinate_delay_usec = std::stoi(tmp);
@@ -240,6 +287,7 @@ int main(int argc, char **argv)
     for (auto &d : devices)
     {
         set_manual_exposure_and_gain(d.dev, exposure_usec, gain);
+        set_manual_color_controls(d.dev, whitebalance, brightness, contrast, saturation, sharpness);
     }
 
     for (auto &d : devices)
