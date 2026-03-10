@@ -124,4 +124,4 @@ ALL_TAG_COORDS = np.concatenate([tag_0_coords, tag_1_coords, tag_2_coords, tag_3
                                   tag_10_coords, tag_11_coords, tag_12_coords, tag_13_coords, tag_14_coords,
                                   tag_15_coords, tag_16_coords, tag_17_coords])
 
-np.concatenate([ALL_TAG_COORDS, np.ones((ALL_TAG_COORDS.shape[0], 1))], axis=1) # add homogeneous coordinate
+ALL_TAG_COORDS = np.concatenate([ALL_TAG_COORDS, np.ones((ALL_TAG_COORDS.shape[0], 1))], axis=1).reshape(NUM_TAGS, 4, 4) # add homogeneous coordinate

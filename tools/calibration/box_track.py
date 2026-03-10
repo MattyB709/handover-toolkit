@@ -6,7 +6,7 @@ import os
 import pickle
 import time
 from utils import get_detections
-from ..box_coords import ALL_TAG_COORDS, NUM_TAGS
+from box_coords import ALL_TAG_COORDS, NUM_TAGS
 
 class Camera:
     def __init__(self, intrinsics, extrinsics):
@@ -34,6 +34,7 @@ def initialize_cameras(dir):
             with open(intr_path, "rb") as f:
                 intrinsics = pickle.load(f)
             
+            cam_id = int(cam_id)
             cameras[cam_id] = Camera(intrinsics=intrinsics, extrinsics=extrinsics)
         else:
             raise Exception(f"Unexpected file in extrinsics directory: {filename}")
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     initial_box_pose = np.random.randn(6)
     
 
-    for cam_id, cam in cameras.enumerate():
+    for cam_id, cam in cameras.items():
 
         tags_found = np.zeros(NUM_TAGS, dtype=np.int32)
         tag_pixel_coords = np.zeros((NUM_TAGS, 4, 2), dtype=np.float64) # pixel coordinates of the 4 corners of each tag, in the same order as ALL_TAG_COORDS
@@ -104,7 +105,8 @@ if __name__ == "__main__":
 
         cap = pb.get_next_capture()
         color_image = cap.color
-        detections = get_detections(color_image)
+        bgr = cv2.imdecode(color_image, cv2.IMREAD_COLOR)
+        detections = get_detections(bgr)
         if detections is None:
             print(f"No detections found for camera {cam_id}. Skipping...")
             continue
@@ -116,8 +118,9 @@ if __name__ == "__main__":
         tag_2d_found = tag_pixel_coords[tags_found == 1].reshape(-1, 2)
 
         # these are in terms of the box frame
-        tag_3d_found = ALL_TAG_COORDS[tags_found == 1].reshape(-1, 3)
+        tag_3d_found = ALL_TAG_COORDS[tags_found == 1].reshape(-1, 4)
 
+        print(box_to_cam.shape, tag_3d_found.shape)
         tag_3d_projected = box_to_cam @ tag_3d_found
 
         print("SHAPE: ",tag_2d_found.shape, tag_3d_projected.shape)
