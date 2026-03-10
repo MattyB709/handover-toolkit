@@ -120,12 +120,22 @@ if __name__ == "__main__":
         tag_2d_found = tag_pixel_coords[tags_found == 1].reshape(-1, 2)
 
         # these are in terms of the box frame
+        # Nx4
         tag_3d_found = ALL_TAG_COORDS[tags_found == 1].reshape(-1, 4)
 
-        print(box_to_cam.shape, tag_3d_found.shape)
-        tag_3d_projected = box_to_cam @ tag_3d_found
+        box_to_cam_cartesian = box_to_cam[:3, :] # drop homogeneous coordinate
+        K = cam.intrinsics
+        tag_3d_projected = K @ box_to_cam_cartesian @ tag_3d_found.T # 3x4 @ 4xN -> 3xN
 
-        print("SHAPE: ",tag_2d_found.shape, tag_3d_projected.shape)
+        # treat z as the new homogenous coordinate, divide x and y by z to get pixel coordinates
+        u = tag_3d_projected[0, :] / tag_3d_projected[2, :]
+        v = tag_3d_projected[1, :] / tag_3d_projected[2, :]
+
+        tag_2d_found = tag_2d_found.T # 2xN
+        print(tag_2d_found.shape, tag_3d_projected.shape)
+        error = np.sum(np.sqrt((u - tag_2d_found[0, :]) ** 2 + (v - tag_2d_found[1, :]) ** 2))
+        print(f"Total reprojection error for camera {cam_id}: {error}")
+        
 
 
 
