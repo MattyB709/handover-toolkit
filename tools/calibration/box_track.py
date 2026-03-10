@@ -41,6 +41,8 @@ def initialize_cameras(dir):
     
     return cameras
 
+# TODO this is the function that will be passed in for optimization, all 
+# the code below once tested needs to be placed in here and we need to calculate total residual error
 def project_points(box_pose: np.ndarray, cameras: dict, tag_coords_3d: np.ndarray):
     calib_dir = "_DATA\\03-03-2026\\03-03-2026\\calib_2026-03-03"
     cameras = initialize_cameras(calib_dir)
