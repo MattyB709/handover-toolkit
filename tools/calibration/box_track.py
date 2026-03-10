@@ -5,7 +5,7 @@ import cv2
 import os
 import pickle
 import time
-from utils import get_detections
+from utils import get_detections, overlay_tags
 from box_coords import ALL_TAG_COORDS, NUM_TAGS
 
 class Camera:
@@ -126,6 +126,10 @@ if __name__ == "__main__":
         tag_3d_projected = box_to_cam @ tag_3d_found
 
         print("SHAPE: ",tag_2d_found.shape, tag_3d_projected.shape)
+
+        # Visualization example
+        # vis, avg_err = overlay_tags(bgr, detected, projected, cam_id=cam_id)
+        # can use tile_images to tile visualzations from all 4 cameras into one display
 
 
 
