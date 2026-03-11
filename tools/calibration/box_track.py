@@ -5,8 +5,9 @@ import cv2
 import os
 import pickle
 import time
-from utils import get_detections
-from box_coords import ALL_TAG_COORDS, NUM_TAGS
+from utils import get_detections, decompose_homography
+import scipy
+from box_coords import ALL_TAG_COORDS, NUM_TAGS, TAG_SIZE
 
 class Camera:
     def __init__(self, intrinsics, extrinsics):
@@ -41,61 +42,95 @@ def initialize_cameras(dir):
     
     return cameras
 
-# TODO this is the function that will be passed in for optimization, all 
-# the code below once tested needs to be placed in here and we need to calculate total residual error
-def project_points(box_pose: np.ndarray, cameras: dict, tag_coords_3d: np.ndarray):
-    calib_dir = "_DATA\\03-03-2026\\03-03-2026\\calib_2026-03-03"
-    cameras = initialize_cameras(calib_dir)
+# returns a 6D pose for the box, [rvec (3,), tvec (3,)]
+def initialize_box_pose(img, K):
+    detections = get_detections(img)
+    if detections is None:
+        raise Exception("No tags detected in the image, cannot initialize box pose")
 
-    # TODO un hardcode this
-    dir_zero = "_DATA\\03-03-2026\\03-03-2026\\k4a_0_000679600712"    
-    dir_one = "_DATA\\03-03-2026\\03-03-2026\\k4a_1_000696700112"
-    dir_two = "_DATA\\03-03-2026\\03-03-2026\\k4a_2_000706100112"
-    dir_three = '_DATA\\03-03-2026\\03-03-2026\\k4a_3_000279301412'
+    # use the first detection to initialize the box pose
+    det = detections[0]
+    tag_id = det.tag_id
 
-    dirs = [dir_zero, dir_one, dir_two, dir_three]
+    T = decompose_homography(det.homography, K)
 
-    return True
+    T[:3, 3] *= (TAG_SIZE / 2)  # scale translation into meters
+    rvec = cv2.Rodrigues(T[:3, :3])[0].flatten()
+    tvec = T[:3, 3].flatten()
+    # return box_pose
 
-if __name__ == "__main__":
-    # import argparse
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--image-dir", type=str, required=True, help="Directory containing input images")
-    # args = parser.parse_args()
+    rvec, _ = cv2.Rodrigues(T[:3, :3])
+    tvec = T[:3, 3]
+    tag_3d_corners = ALL_TAG_COORDS[tag_id][:, :3] # remove homogenous coords
+    tag_3d_center = tag_3d_corners.mean(axis=0)
 
-    calib_dir = "_DATA\\03-03-2026\\03-03-2026\\calib_2026-03-03"
-    cameras = initialize_cameras(calib_dir)
+    # now get the box pose relative to the camera, the idea is to use the box relative to the tag center
+    # and the tag relative to the camera to get the box relative to the camera
 
-    # TODO un hardcode this
-    dir_zero = "_DATA\\03-03-2026\\03-03-2026\\k4a_0_000679600712"    
-    dir_one = "_DATA\\03-03-2026\\03-03-2026\\k4a_1_000696700112"
-    dir_two = "_DATA\\03-03-2026\\03-03-2026\\k4a_2_000706100112"
-    dir_three = '_DATA\\03-03-2026\\03-03-2026\\k4a_3_000279301412'
 
-    dirs = [dir_zero, dir_one, dir_two, dir_three]
 
-    # initial 6D pose for the box, [r, t]
-    initial_box_pose = np.random.randn(6)
-    
+
+
+
+
+def project_points(box_pose: np.ndarray,
+                   cameras: dict,
+                   tag_coords_3d: np.ndarray,
+                   tags_found: np.ndarray,
+                   tag_pixel_coords: np.ndarray):
+
+    print("projecting points with box pose: ", box_pose)
+    residuals = []
+
+    rvec = box_pose[:3].reshape(3, 1)
+    tvec = box_pose[3:]
+
+    R, _ = cv2.Rodrigues(rvec)
+
+    box_to_world = np.eye(4)
+    box_to_world[:3, :3] = R
+    box_to_world[:3, 3] = tvec
 
     for cam_id, cam in cameras.items():
+        found_mask = tags_found[cam_id] == 1
 
-        tags_found = np.zeros(NUM_TAGS, dtype=np.int32)
-        tag_pixel_coords = np.zeros((NUM_TAGS, 4, 2), dtype=np.float64) # pixel coordinates of the 4 corners of each tag, in the same order as ALL_TAG_COORDS
-        rvec = initial_box_pose[:3].reshape(3,1)
-        tvec = initial_box_pose[3:]
+        tag_2d_found = tag_pixel_coords[cam_id, found_mask].reshape(-1, 2)
+        tag_3d_found = tag_coords_3d[found_mask].reshape(-1, 4)
 
-        R, _ = cv2.Rodrigues(rvec)
-
-        box_to_world = np.eye(4)
-        box_to_world[:3, :3] = R
-        box_to_world[:3, 3] = tvec
-        
         extr = cam.extrinsics
-        world_to_cam = np.linalg.inv(extr) 
-
+        world_to_cam = np.linalg.inv(extr)
         box_to_cam = world_to_cam @ box_to_world
-        
+
+        box_to_cam_cartesian = box_to_cam[:3, :]   # 3x4
+        K = cam.intrinsics                         # 3x3
+
+        tag_3d_projected = K @ box_to_cam_cartesian @ tag_3d_found.T  # 3xN
+
+        u = tag_3d_projected[0, :] / tag_3d_projected[2, :]
+        v = tag_3d_projected[1, :] / tag_3d_projected[2, :]
+        proj_2d = np.stack((u, v), axis=1)  # Nx2
+
+        residuals.append((proj_2d - tag_2d_found).ravel())
+
+    return np.concatenate(residuals)
+
+if __name__ == "__main__":
+
+    calib_dir = "_DATA\\03-03-2026\\03-03-2026\\calib_2026-03-03"
+    cameras = initialize_cameras(calib_dir)
+
+    # TODO un hardcode this
+    dir_zero = "_DATA\\03-03-2026\\03-03-2026\\k4a_0_000679600712"    
+    dir_one = "_DATA\\03-03-2026\\03-03-2026\\k4a_1_000696700112"
+    dir_two = "_DATA\\03-03-2026\\03-03-2026\\k4a_2_000706100112"
+    dir_three = '_DATA\\03-03-2026\\03-03-2026\\k4a_3_000279301412'
+
+    dirs = [dir_zero, dir_one, dir_two, dir_three]
+    tags_found = np.zeros((4, NUM_TAGS))
+    tag_pixel_coords = np.zeros((4, NUM_TAGS, 4, 2)) # pixel coordinates of the 4 corners of each tag, in the same order as ALL_TAG_COORDS
+
+    for cam_id in range(len(cameras)):
+
         cam_dir = dirs[cam_id]
         
         video_path = os.path.join(cam_dir, "raw.mkv")
@@ -114,41 +149,12 @@ if __name__ == "__main__":
             continue
         for det in detections:
             tag_id = det.tag_id
-            tags_found[det.tag_id] = 1
-            tag_pixel_coords[det.tag_id] = det.corners
+            tags_found[cam_id, tag_id] = 1
+            tag_pixel_coords[cam_id, tag_id] = det.corners
 
-        tag_2d_found = tag_pixel_coords[tags_found == 1].reshape(-1, 2)
+    # initial 6D pose for the box, [r, t]
+    initial_box_pose = np.random.randn(6)
 
-        # these are in terms of the box frame
-        # Nx4
-        tag_3d_found = ALL_TAG_COORDS[tags_found == 1].reshape(-1, 4)
-
-        box_to_cam_cartesian = box_to_cam[:3, :] # drop homogeneous coordinate
-        K = cam.intrinsics
-        tag_3d_projected = K @ box_to_cam_cartesian @ tag_3d_found.T # 3x4 @ 4xN -> 3xN
-
-        # treat z as the new homogenous coordinate, divide x and y by z to get pixel coordinates
-        u = tag_3d_projected[0, :] / tag_3d_projected[2, :]
-        v = tag_3d_projected[1, :] / tag_3d_projected[2, :]
-
-        tag_2d_found = tag_2d_found.T # 2xN
-        print(tag_2d_found.shape, tag_3d_projected.shape)
-        error = np.sum(np.sqrt((u - tag_2d_found[0, :]) ** 2 + (v - tag_2d_found[1, :]) ** 2))
-        print(f"Total reprojection error for camera {cam_id}: {error}")
-        
-
-
-
-
-
-            
-
-
-
-
-
-
-
-        
-
-
+    result = scipy.optimize.least_squares(project_points, initial_box_pose, args=(cameras, ALL_TAG_COORDS), method='lm')
+    rms = np.sqrt(np.mean(result.fun**2))
+    print("final box re projection rms: ", rms)
