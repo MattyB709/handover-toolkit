@@ -130,19 +130,3 @@ if __name__ == "__main__":
         # Visualization example
         # vis, avg_err = overlay_tags(bgr, detected, projected, cam_id=cam_id)
         # can use tile_images to tile visualzations from all 4 cameras into one display
-
-
-
-
-
-            
-
-
-
-
-
-
-
-        
-
-
