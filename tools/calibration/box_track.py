@@ -42,8 +42,28 @@ def initialize_cameras(dir):
     
     return cameras
 
+# constructs (4, 4) tag->box transform from known corner positions
+def get_tag_to_box(tag_id):
+    corners = ALL_TAG_COORDS[tag_id, :, :3]
+
+    origin = corners.mean(axis=0)
+
+    x_axis = corners[1] - corners[0]
+    y_axis = corners[0] - corners[3]
+    x_axis /= np.linalg.norm(x_axis)
+    y_axis /= np.linalg.norm(y_axis)
+    z_axis = np.cross(x_axis, y_axis)
+
+    tag_to_box = np.eye(4)
+    tag_to_box[:3, 0] = x_axis
+    tag_to_box[:3, 1] = y_axis
+    tag_to_box[:3, 2] = z_axis
+    tag_to_box[:3, 3] = origin
+
+    return tag_to_box
+
 # returns a 6D pose for the box, [rvec (3,), tvec (3,)]
-def initialize_box_pose(img, K):
+def initialize_box_pose(img, K, cam_extrinsics=np.eye(4)):
     detections = get_detections(img)
     if detections is None:
         raise Exception("No tags detected in the image, cannot initialize box pose")
@@ -54,15 +74,27 @@ def initialize_box_pose(img, K):
 
     T = decompose_homography(det.homography, K)
 
-    T[:3, 3] *= (TAG_SIZE / 2)  # scale translation into meters
-    rvec = cv2.Rodrigues(T[:3, :3])[0].flatten()
-    tvec = T[:3, 3].flatten()
-    # return box_pose
+    T[:3, 3] *= (TAG_SIZE / 2 / 1000.0)  # scale translation into meters
 
-    rvec, _ = cv2.Rodrigues(T[:3, :3])
-    tvec = T[:3, 3]
-    tag_3d_corners = ALL_TAG_COORDS[tag_id][:, :3] # remove homogenous coords
-    tag_3d_center = tag_3d_corners.mean(axis=0)
+    tag_to_box  = get_tag_to_box(tag_id)
+    tag_to_box[:3, 3] /= 1000.0  # mm -> metres
+
+    box_to_cam   = T @ np.linalg.inv(tag_to_box)
+    box_to_world = cam_extrinsics @ box_to_cam
+
+    rvec, _ = cv2.Rodrigues(box_to_world[:3, :3])
+    tvec    = box_to_world[:3, 3]
+
+    return np.concatenate([rvec.ravel(), tvec])
+
+    # rvec = cv2.Rodrigues(T[:3, :3])[0].flatten()
+    # tvec = T[:3, 3].flatten()
+    # # return box_pose
+
+    # rvec, _ = cv2.Rodrigues(T[:3, :3])
+    # tvec = T[:3, 3]
+    # tag_3d_corners = ALL_TAG_COORDS[tag_id][:, :3] # remove homogenous coords
+    # tag_3d_center = tag_3d_corners.mean(axis=0)
 
     # now get the box pose relative to the camera, the idea is to use the box relative to the tag center
     # and the tag relative to the camera to get the box relative to the camera
