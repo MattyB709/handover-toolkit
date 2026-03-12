@@ -1,10 +1,10 @@
 import numpy as np
 
-# mm
-BOX_SIZE_X = 190 
-BOX_SIZE_Y = 270
-BOX_SIZE_Z = 64
-TAG_SIZE = 44 # size of just the black box of the tag
+# m
+BOX_SIZE_X = 190 / 1000 
+BOX_SIZE_Y = 270 / 1000
+BOX_SIZE_Z = 64 / 1000
+TAG_SIZE = 44 / 1000 # size of just the black box of the tag
 TAG_WHITE_SIZE = 7 # size of the whites, the total tag length is TAG_SIZE + 2 * TAG_WHITE_SIZE
 NUM_TAGS = 18
 
@@ -124,4 +124,5 @@ ALL_TAG_COORDS = np.concatenate([tag_0_coords, tag_1_coords, tag_2_coords, tag_3
                                   tag_10_coords, tag_11_coords, tag_12_coords, tag_13_coords, tag_14_coords,
                                   tag_15_coords, tag_16_coords, tag_17_coords])
 
+# (18, 4, 4)
 ALL_TAG_COORDS = np.concatenate([ALL_TAG_COORDS, np.ones((ALL_TAG_COORDS.shape[0], 1))], axis=1).reshape(NUM_TAGS, 4, 4) # add homogeneous coordinate
